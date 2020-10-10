@@ -19,8 +19,10 @@
 ```
 
 ## Demo
-Passed:  
+Passed:    
 ![Passed](F16_falsify/results/f16_passed.gif)
 
-Failed:
+Failed:   
 ![Failed](F16_falsify/results/f16_unsafe.gif)
+
+See [Demo Notebook](F16_falsify/demo.ipynb).
