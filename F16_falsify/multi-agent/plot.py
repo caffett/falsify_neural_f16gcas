@@ -1,8 +1,3 @@
-'''
-Stanley Bak
-Python code for F-16 animation video output
-'''
-
 import math
 import time
 import numpy as np
@@ -61,152 +56,93 @@ def rotate3d(pts, theta, psi, phi):
     return rv
 
 
-def plot3d_anim(times, states, modes, ps_list, Nz_list, skip=1, filename=None):
-    full_plot = True
-
-    if filename == '':  # plot to the screen
-        filename = None
-        skip = 20
-        full_plot = False
-    elif filename.endswith('.gif'):
-        skip = 5
-    else:
-        skip = 1  # plot every frame
-
-    assert len(times) == len(states)
-
+def multi_agent_plot3d_anim(env, skip=1, filename=None):
     start = time.time()
-
-    times = times[0::skip]
-    states = states[0::skip]
-    modes = modes[0::skip]
-    ps_list = ps_list[0::skip]
-    Nz_list = Nz_list[0::skip]
 
     fig = plt.figure(figsize=(6, 5))
     ax = fig.add_subplot(111, projection='3d')
     ax.view_init(30, 45)
 
-    pos_xs = [pt[9] for pt in states]
-    pos_ys = [pt[10] for pt in states]
-    pos_zs = [pt[11] for pt in states]
-
-    trail_line, = ax.plot([], [], [], color='r', lw=1)
-
     data = loadmat(f'{current_path}/f-16.mat')
     f16_pts = data['V']
     f16_faces = data['F']
 
-    plane_polys = Poly3DCollection([], color=None if full_plot else 'k')
+    plane_polys = Poly3DCollection([], color="k")
     ax.add_collection3d(plane_polys)
-
-    ax.set_xlim([min(pos_xs), max(pos_xs)])
-    ax.set_ylim([min(pos_ys), max(pos_xs)])
-    ax.set_zlim([min(pos_zs), max(pos_zs)])
 
     ax.set_xlabel('X [ft]')
     ax.set_ylabel('Y [ft]')
     ax.set_zlabel('Altitude [ft] ')
-    frames = len(times)
 
-    # text
-    fontsize = 14
-    time_text = ax.text2D(
-        0.05, 1.07, "", transform=ax.transAxes, fontsize=fontsize)
-    mode_text = ax.text2D(0.95, 1.07, "", transform=ax.transAxes,
-                          fontsize=fontsize, horizontalalignment='right')
-
-    alt_text = ax.text2D(
-        0.05, 1.00, "", transform=ax.transAxes, fontsize=fontsize)
-    v_text = ax.text2D(0.95, 1.00, "", transform=ax.transAxes,
-                       fontsize=fontsize, horizontalalignment='right')
-
-    alpha_text = ax.text2D(
-        0.05, 0.93, "", transform=ax.transAxes, fontsize=fontsize)
-    beta_text = ax.text2D(0.95, 0.93, "", transform=ax.transAxes,
-                          fontsize=fontsize, horizontalalignment='right')
-
-    nz_text = ax.text2D(
-        0.05, 0.86, "", transform=ax.transAxes, fontsize=fontsize)
-    ps_text = ax.text2D(0.95, 0.86, "", transform=ax.transAxes,
-                        fontsize=fontsize, horizontalalignment='right')
-
-    ang_text = ax.text2D(0.5, 0.79, "", transform=ax.transAxes,
-                         fontsize=fontsize, horizontalalignment='center')
+    frames = len(env.plant_dict["plant_0"].times)
+    trail_lines = {k: ax.plot([], [], [], lw=1)[0] for k in env.plant_dict}
 
     def anim_func(frame):
         'updates for the animation frame'
 
-        speed = states[frame][0]
-        alpha = states[frame][1]
-        beta = states[frame][2]
-        alt = states[frame][11]
-        phi = states[frame][3]
-        theta = states[frame][4]
-        psi = states[frame][5]
-        dx = states[frame][9]
-        dy = states[frame][10]
-        dz = states[frame][11]
-
-        time_text.set_text('t = {:.2f} sec'.format(times[frame]))
-        mode_text.set_text('Mode: {}'.format(modes[frame]))
-
-        alt_text.set_text('h = {:.2f} ft'.format(alt))
-        v_text.set_text('V = {:.2f} ft/sec'.format(speed))
-
-        alpha_text.set_text('$\\alpha$ = {:.2f} deg'.format(rad2deg(alpha)))
-        beta_text.set_text('$\\beta$ = {:.2f} deg'.format(rad2deg(beta)))
-
-        nz_text.set_text('$N_z$ = {:.2f} g'.format(Nz_list[frame]))
-        ps_text.set_text(
-            '$p_s$ = {:.2f} deg/sec'.format(rad2deg(ps_list[frame])))
-
-        ang_text.set_text('[$\\phi$, $\\theta$, $\\psi$] = [{:.2f}, {:.2f}, {:.2f}] deg'.format(
-            rad2deg(phi), rad2deg(theta), rad2deg(psi)))
-
-        # do trail
-        trail_len = 200 / skip
-        start_index = int(max(0, frame - trail_len))
-        trail_line.set_data(pos_xs[start_index:frame],
-                            pos_ys[start_index:frame])
-        trail_line.set_3d_properties(pos_zs[start_index:frame])
-
-        scale = 25
-        pts = scale3d(f16_pts, [-scale, scale, scale])
-
-        pts = rotate3d(pts, theta, -psi, phi)
-
-        size = 1000
-        minx = dx - size
-        maxx = dx + size
-        miny = dy - size
-        maxy = dy + size
-        minz = dz - size
-        maxz = dz + size
-
-        ax.set_xlim([minx, maxx])
-        ax.set_ylim([miny, maxy])
-        ax.set_zlim([minz, maxz])
-
         verts = []
         fc = []
-        count = 0
 
-        for face in f16_faces:
-            face_pts = []
+        for k, single_env in env.plant_dict.items():
+            pos_xs = [pt[9] for pt in single_env.states]
+            pos_ys = [pt[10] for pt in single_env.states]
+            pos_zs = [pt[11] for pt in single_env.states]
 
-            count = count + 1
+            ax.set_xlim([min(pos_xs), max(pos_xs)])
+            ax.set_ylim([min(pos_ys), max(pos_xs)])
+            ax.set_zlim([min(pos_zs), max(pos_zs)])
+            states = single_env.states
 
-            if not full_plot and count % 10 != 0:
-                continue
+            speed = states[frame][0]
+            alpha = states[frame][1]
+            beta = states[frame][2]
+            alt = states[frame][11]
+            phi = states[frame][3]
+            theta = states[frame][4]
+            psi = states[frame][5]
+            dx = states[frame][9]
+            dy = states[frame][10]
+            dz = states[frame][11]
 
-            for index in face:
-                face_pts.append((pts[index - 1][0] + dx,
-                                 pts[index - 1][1] + dy,
-                                 pts[index - 1][2] + dz))
+            # do trail
+            trail_lines[k].set_data(pos_xs[:frame],
+                                pos_ys[:frame])
+            trail_lines[k].set_3d_properties(pos_zs[:frame])
 
-            verts.append(face_pts)
-            fc.append('k')
+            scale = 15
+            pts = scale3d(f16_pts, [-scale, scale, scale])
+
+            pts = rotate3d(pts, theta, -psi, phi)
+
+            size = 1000
+            minx = dx - size
+            maxx = dx + size
+            miny = dy - size
+            maxy = dy + size
+            minz = dz - size
+            maxz = dz + size
+
+            ax.set_xlim([minx, maxx])
+            ax.set_ylim([miny, maxy])
+            ax.set_zlim([minz, maxz])
+
+            count = 0
+
+            for face in f16_faces:
+                face_pts = []
+
+                count = count + 1
+
+                if count % skip != 0:
+                    continue
+
+                for index in face:
+                    face_pts.append((pts[index - 1][0] + dx,
+                                     pts[index - 1][1] + dy,
+                                     pts[index - 1][2] + dz))
+
+                verts.append(face_pts)
+                fc.append('k')
 
         # draw ground
         if minz <= 0 and maxz >= 0:
@@ -217,8 +153,6 @@ def plot3d_anim(times, states, modes, ps_list, Nz_list, skip=1, filename=None):
 
         plane_polys.set_verts(verts)
         plane_polys.set_facecolors(fc)
-
-        return None
 
     anim_obj = animation.FuncAnimation(fig, anim_func, frames, interval=30,
                                        blit=False, repeat=True)
@@ -255,7 +189,7 @@ def plot3d_anim(times, states, modes, ps_list, Nz_list, skip=1, filename=None):
         plt.show()
 
 
-def plot3d(time, state, mode, ps, Nz, filename=None):
+def multi_agent_plot3d(env):
     '''
     make a 3d plot of the GCAS maneuver
     '''
@@ -277,93 +211,55 @@ def plot3d(time, state, mode, ps, Nz, filename=None):
     ax.set_ylabel('Y [ft]')
     ax.set_zlabel('Altitude [ft] ')
 
-    # text
-    fontsize = 14
-    time_text = ax.text2D(
-        0.05, 1.07, "", transform=ax.transAxes, fontsize=fontsize)
-    mode_text = ax.text2D(0.95, 1.07, "", transform=ax.transAxes,
-                          fontsize=fontsize, horizontalalignment='right')
-
-    alt_text = ax.text2D(
-        0.05, 1.00, "", transform=ax.transAxes, fontsize=fontsize)
-    v_text = ax.text2D(0.95, 1.00, "", transform=ax.transAxes,
-                       fontsize=fontsize, horizontalalignment='right')
-
-    alpha_text = ax.text2D(
-        0.05, 0.93, "", transform=ax.transAxes, fontsize=fontsize)
-    beta_text = ax.text2D(0.95, 0.93, "", transform=ax.transAxes,
-                          fontsize=fontsize, horizontalalignment='right')
-
-    nz_text = ax.text2D(
-        0.05, 0.86, "", transform=ax.transAxes, fontsize=fontsize)
-    ps_text = ax.text2D(0.95, 0.86, "", transform=ax.transAxes,
-                        fontsize=fontsize, horizontalalignment='right')
-
-    ang_text = ax.text2D(0.5, 0.79, "", transform=ax.transAxes,
-                         fontsize=fontsize, horizontalalignment='center')
-
-    speed = state[0]
-    alpha = state[1]
-    beta = state[2]
-    alt = state[11]
-    phi = state[3]
-    theta = state[4]
-    psi = state[5]
-    dx = state[9]
-    dy = state[10]
-    dz = state[11]
-
-    time_text.set_text('t = {:.2f} sec'.format(time))
-    mode_text.set_text('Mode: {}'.format(mode))
-
-    alt_text.set_text('h = {:.2f} ft'.format(alt))
-    v_text.set_text('V = {:.2f} ft/sec'.format(speed))
-
-    alpha_text.set_text('$\\alpha$ = {:.2f} deg'.format(rad2deg(alpha)))
-    beta_text.set_text('$\\beta$ = {:.2f} deg'.format(rad2deg(beta)))
-
-    nz_text.set_text('$N_z$ = {:.2f} g'.format(Nz))
-    ps_text.set_text('$p_s$ = {:.2f} deg/sec'.format(rad2deg(ps)))
-
-    ang_text.set_text('[$\\phi$, $\\theta$, $\\psi$] = [{:.2f}, {:.2f}, {:.2f}] deg'.format(
-        rad2deg(phi), rad2deg(theta), rad2deg(psi)))
-
-    scale = 25
-    pts = scale3d(f16_pts, [-scale, scale, scale])
-
-    pts = rotate3d(pts, theta, -psi, phi)
-
-    size = 1000
-    minx = dx - size
-    maxx = dx + size
-    miny = dy - size
-    maxy = dy + size
-    minz = dz - size
-    maxz = dz + size
-
-    ax.set_xlim([minx, maxx])
-    ax.set_ylim([miny, maxy])
-    ax.set_zlim([minz, maxz])
-
     verts = []
     fc = []
-    count = 0
 
-    for face in f16_faces:
-        face_pts = []
+    for k in env.plant_dict:
+        state = env.plant_dict[k].states[-1]
+        speed = state[0]
+        alpha = state[1]
+        beta = state[2]
+        alt = state[11]
+        phi = state[3]
+        theta = state[4]
+        psi = state[5]
+        dx = state[9]
+        dy = state[10]
+        dz = state[11]
 
-        count = count + 1
+        scale = 15
+        pts = scale3d(f16_pts, [-scale, scale, scale])
+        pts = rotate3d(pts, theta, -psi, phi)
 
-        if not full_plot and count % 10 != 0:
-            continue
+        size = 1000
+        minx = dx - size
+        maxx = dx + size
+        miny = dy - size
+        maxy = dy + size
+        minz = dz - size
+        maxz = dz + size
 
-        for index in face:
-            face_pts.append((pts[index - 1][0] + dx,
-                             pts[index - 1][1] + dy,
-                             pts[index - 1][2] + dz))
+        ax.set_xlim([minx, maxx])
+        ax.set_ylim([miny, maxy])
+        ax.set_zlim([minz, maxz])
 
-        verts.append(face_pts)
-        fc.append('k')
+        count = 0
+
+        for face in f16_faces:
+            face_pts = []
+
+            count = count + 1
+
+            if not full_plot and count % 10 != 0:
+                continue
+
+            for index in face:
+                face_pts.append((pts[index - 1][0] + dx,
+                                 pts[index - 1][1] + dy,
+                                 pts[index - 1][2] + dz))
+
+            verts.append(face_pts)
+            fc.append('k')
 
     # draw ground
     if minz <= 0 and maxz >= 0:
@@ -374,57 +270,4 @@ def plot3d(time, state, mode, ps, Nz, filename=None):
 
     plane_polys.set_verts(verts)
     plane_polys.set_facecolors(fc)
-
     plt.show()
-
-
-def plot2d(filename, times, plot_data_list):
-    '''plot state variables in 2d
-
-    plot data list of is a list of (values_list, var_data),
-    where values_list is an 2-d array, the first is time step, the second is a state vector
-    and each var_data is a list of tuples: (state_index, label)
-    '''
-
-    num_plots = sum([len(var_data) for _, var_data in plot_data_list])
-
-    fig = plt.figure(figsize=(7, 5))
-
-    for plot_index in range(num_plots):
-        ax = fig.add_subplot(num_plots, 1, plot_index + 1)
-        ax.tick_params(axis='both', which='major', labelsize=16)
-
-        sum_plots = 0
-        states = None
-        state_var_data = None
-
-        for values_list, var_data in plot_data_list:
-            if plot_index < sum_plots + len(var_data):
-                states = values_list
-                state_var_data = var_data
-                break
-
-            sum_plots += len(var_data)
-
-        state_index, label = state_var_data[plot_index - sum_plots]
-
-        # state is just a single number
-        if state_index == 0 and isinstance(states[0], float):
-            ys = states
-        else:
-            ys = [state[state_index] for state in states]
-
-        ax.plot(times, ys, '-')
-
-        ax.set_ylabel(label, fontsize=16)
-
-        # last one gets an x axis label
-        if plot_index == num_plots - 1:
-            ax.set_xlabel('Time', fontsize=16)
-
-    plt.tight_layout()
-
-    if filename is not None:
-        plt.savefig(filename, bbox_inches='tight')
-    else:
-        plt.show()
